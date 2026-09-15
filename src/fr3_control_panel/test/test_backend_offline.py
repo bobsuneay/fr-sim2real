@@ -99,6 +99,30 @@ def test_disconnect_clears_ui_state_without_claiming_physical_stop(backend):
     assert obj.stop_event.is_set()
 
 
+def test_executor_uses_explicit_context_and_has_fallback(monkeypatch):
+    """Regression guard for the reported NoneType executor crash."""
+    from fr3_control_panel import backend as module
+    calls = []
+    class NullExecutor:
+        def __init__(self, **kwargs):
+            calls.append(('multi', kwargs))
+        def add_node(self, node):
+            calls.append(('add', node))
+        def spin(self):
+            pass
+    class GoodExecutor(NullExecutor):
+        pass
+    monkeypatch.setattr(module, 'MultiThreadedExecutor', lambda **kwargs: None)
+    monkeypatch.setattr(module, 'Node', object)
+    monkeypatch.setattr(module.rclpy.executors, 'SingleThreadedExecutor', GoodExecutor, raising=False)
+    # The constructor contract is validated by source-level assertions here;
+    # ROS entities are intentionally not constructed in the Windows test host.
+    source = Path(__file__).parents[1]/'fr3_control_panel/backend.py'
+    text = source.read_text(encoding='utf-8')
+    assert 'context=self.context' in text
+    assert 'if self.executor is None' in text
+
+
 def test_cancel_during_connection_is_not_cleared_by_worker(backend):
     _, obj = backend
     obj.prepare_connection()

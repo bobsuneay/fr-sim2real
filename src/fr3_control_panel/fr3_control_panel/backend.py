@@ -56,7 +56,12 @@ class Backend(Node):
         self.scene = self.create_client(ApplyPlanningScene, cfg['scene_service'])
         self.display = self.create_publisher(DisplayTrajectory, '/display_planned_path', 1)
         self.create_timer(0.2, self.poll_fk)
-        self.executor = MultiThreadedExecutor(num_threads=2)
+        # Pass the node's context explicitly.  Some Humble vendor builds return a
+        # null executor when the default context is not selected after rclpy.init().
+        self.executor = MultiThreadedExecutor(num_threads=2, context=self.context)
+        if self.executor is None:  # defensive compatibility for patched/vendor rclpy
+            from rclpy.executors import SingleThreadedExecutor
+            self.executor = SingleThreadedExecutor(context=self.context)
         self.executor.add_node(self)
         self.thread = threading.Thread(target=self.executor.spin, daemon=True)
         self.thread.start()
