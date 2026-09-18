@@ -5,11 +5,21 @@
 
 执行原则：先只读反馈，再空载低速运动，最后才允许自动任务。
 
+## 终端约定
+
+- `T1`：Ubuntu 项目主终端，用于构建、生成配置、启动真机。
+- `T2`：Ubuntu 状态检查终端，用于查看控制器、话题、服务和日志。
+- `T3`：Ubuntu 相机驱动终端，用于启动 RealSense / 工业相机驱动。
+- `T4`：Ubuntu 可选工具终端，用于启动 ArUco 测试件跟踪。
+- `WebApp`：控制柜网页，不是 Linux 终端。
+
 ## 0. 前置条件
 
 - Ubuntu 22.04，x86_64
 - ROS 2 Humble 已安装
 - 本仓库已构建：
+
+**T1 - Ubuntu 项目主终端**
 
 ```bash
 cd /path/to/fr3-inspection-sim2real
@@ -19,6 +29,8 @@ source install/setup.bash
 
 - 用户已加入串口组：
 
+**T1 - Ubuntu 项目主终端**
+
 ```bash
 sudo usermod -aG dialout "$USER"
 ```
@@ -26,6 +38,8 @@ sudo usermod -aG dialout "$USER"
 然后注销并重新登录。
 
 ## 1. 确认控制柜软件版本
+
+**WebApp - 控制柜网页**
 
 分别登录左右控制柜 WebApp，进入：
 
@@ -54,6 +68,8 @@ sudo usermod -aG dialout "$USER"
 
 从 Ubuntu 测试：
 
+**T1 - Ubuntu 项目主终端**
+
 ```bash
 ping -c 3 LEFT_ROBOT_IP
 ping -c 3 RIGHT_ROBOT_IP
@@ -62,6 +78,8 @@ ping -c 3 RIGHT_ROBOT_IP
 如果两个控制柜仍是同一个默认 IP，需要先解决网络隔离或修改其中一个 IP。
 
 ### 2.2 HKV 串口
+
+**T1 - Ubuntu 项目主终端**
 
 ```bash
 ls -l /dev/serial/by-id/
@@ -78,15 +96,17 @@ ls -l /dev/serial/by-id/
 
 ## 3. 生成本地配置目录
 
+**T1 - Ubuntu 项目主终端**
+
 ```bash
 cd /path/to/fr3-inspection-sim2real
-bash scripts/init_config.sh /absolute/fr3-config
+bash scripts/init_config.sh "$HOME/fr3-config"
 ```
 
 会生成：
 
 ```text
-/absolute/fr3-config/
+$HOME/fr3-config/
 ├── hardware.yaml
 ├── real_feedback.yaml
 ├── arms.yaml
@@ -100,7 +120,7 @@ bash scripts/init_config.sh /absolute/fr3-config
 编辑：
 
 ```text
-/absolute/fr3-config/hardware.yaml
+$HOME/fr3-config/hardware.yaml
 ```
 
 必须填写：
@@ -163,6 +183,8 @@ target_points:
 
 执行：
 
+**T1 - Ubuntu 项目主终端**
+
 ```bash
 python3 scripts/calibrate_geometry.py registration \
   survey.yaml \
@@ -195,6 +217,8 @@ world_from_tool:
 
 执行：
 
+**T1 - Ubuntu 项目主终端**
+
 ```bash
 python3 scripts/calibrate_geometry.py pivot \
   pivot.yaml \
@@ -221,7 +245,7 @@ gripper:
 编辑：
 
 ```text
-/absolute/fr3-config/real_feedback.yaml
+$HOME/fr3-config/real_feedback.yaml
 ```
 
 需要现场记录：
@@ -285,25 +309,46 @@ topic_remappings:
   /waist_camera/image_raw: /actual/waist/image
 ```
 
+### 8.4 启动相机驱动
+
+**T3 - Ubuntu 相机驱动终端**
+
+按现场相机型号启动驱动，例如 RealSense：
+
+```bash
+ros2 launch realsense2_camera rs_launch.py
+```
+
+如果是工业相机或 Orbbec，请替换为对应厂商驱动。相机启动后，在 **T2** 检查话题：
+
+```bash
+ros2 topic list
+ros2 topic hz /head_camera/points
+```
+
 ## 9. 可选：ArUco 测试件跟踪
 
 如果要使用刚性带标记测试件，填写：
 
 ```text
-/absolute/fr3-config/tracker.yaml
+$HOME/fr3-config/tracker.yaml
 ```
 
 启动：
 
+**T4 - Ubuntu 可选工具终端**
+
 ```bash
 ros2 run fr3_bolt_inspection_cell aruco_object_tracker \
-  --ros-args --params-file /absolute/fr3-config/tracker.yaml
+  --ros-args --params-file "$HOME/fr3-config/tracker.yaml"
 ```
 
 ## 10. 离线校验配置
 
+**T1 - Ubuntu 项目主终端**
+
 ```bash
-python3 scripts/check_deployment.py /absolute/fr3-config
+python3 scripts/check_deployment.py "$HOME/fr3-config"
 ```
 
 输出应类似：
@@ -316,13 +361,17 @@ Configuration and model valid: 12 robot axes, 2 gripper command joints, 0 Gazebo
 
 ## 11. 只读反馈启动
 
+**T1 - Ubuntu 项目主终端**
+
 ```bash
-bash scripts/start_real.sh /absolute/fr3-config
+bash scripts/start_real.sh "$HOME/fr3-config"
 ```
 
 注意：即使不带 `--execute`，驱动也可能发送保持指令，不是完全只读。
 
 另开终端：
+
+**T2 - Ubuntu 状态检查终端**
 
 ```bash
 ros2 control list_controllers -c /left_controller_manager
@@ -343,8 +392,10 @@ ros2 topic echo /joint_states --once
 
 退出上一次启动后：
 
+**T1 - Ubuntu 项目主终端**
+
 ```bash
-bash scripts/start_real.sh /absolute/fr3-config --execute
+bash scripts/start_real.sh "$HOME/fr3-config" --execute
 ```
 
 按顺序：
@@ -381,11 +432,15 @@ commissioned: true
 
 ## 14. 开始自动任务
 
+**T1 - Ubuntu 项目主终端**
+
 ```bash
-bash scripts/start_real.sh /absolute/fr3-config --execute
+bash scripts/start_real.sh "$HOME/fr3-config" --execute
 ```
 
 启动任务：
+
+**T2 - Ubuntu 状态检查终端**
 
 ```bash
 ros2 service call /inspection/start std_srvs/srv/Trigger '{}'
@@ -393,9 +448,10 @@ ros2 service call /inspection/start std_srvs/srv/Trigger '{}'
 
 停止：
 
+**T2 - Ubuntu 状态检查终端**
+
 ```bash
 ros2 service call /inspection/stop std_srvs/srv/Trigger '{}'
 ```
 
 自动任务和单臂示教 UI 不能同时运行。
-
